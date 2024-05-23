@@ -1,0 +1,92 @@
+---
+title: Final Project
+author: "Jason Ballinger, Jason Perez, Megan Juza"
+date: "May 21, 2024"
+output: html_document
+---
+
+```{r, imports, include=FALSE}
+library(readr)
+library(leaflet)
+library(dplyr)
+
+covid_global_confirmed <- data.frame(read_delim(file="time_series_covid19_confirmed_global.csv", delim=","))
+covid_global_deaths <- data.frame(read_delim(file="time_series_covid19_deaths_global.csv", delim=","))
+covid_us_confirmed <- data.frame(read_delim(file="time_series_covid19_confirmed_US.csv", delim=","))
+covid_us_deaths <- data.frame(read_delim(file="time_series_covid19_deaths_US.csv", delim=","))
+covid_global_recovered <- data.frame(read_delim(file="time_series_covid19_recovered_global.csv", delim=","))
+```
+
+# Objective 1 - Global Map
+
+You are tasked to create a world map to gain an appreciation for where the most occurrences of COVID-19 confirmations and deaths are located.
+
+Create this map using leaflet for the most recent date as shown below. For this map, sum the confirmations and deaths of provinces into one value to depict the total number for the country they belong to. When creating a marker for each country in the map, calculate lat and long as the mean values for the provinces that make up each country.
+
+Customize the map to reflect the differences in magnitude for confirmations and deaths. In the example map below, circle markers that are blue represent low values, gray represents neutral values, and red represents high values. Low, middle, and high values were categorized to aesthetically map the markers based on their probabilistic distribution using the quartile function. You may use any method you like so that it is logical and allows visualization of value intensity. As well, customize the map to include hover labels that indicate country names and popup labels to show the value of confirmations and deaths for that country. For extra help using leaflet, consult this [website](https://rstudio.github.io/leaflet/articles/markers.html) along with the information provided in your textbooks.
+
+```{r, obj1, include=TRUE}
+# Manipulate data: group by country, average Latitude and Longitude, summarise case totals
+globalCasesByCountry <- covid_global_confirmed %>%
+  filter(!is.na(Lat)) %>%
+  group_by(Country.Region) %>%
+  summarise(across(Lat:Long, mean), across(c(starts_with("X")), sum)) %>%
+  select(Country.Region, Lat, Long, X3.9.23)
+
+globalDeathsByCountry <- covid_global_deaths %>%
+  group_by(Country.Region) %>%
+  summarise(across(c(starts_with("X")), sum)) %>%
+  select(Country.Region, X3.9.23)
+
+# Get values for every 20% of cases
+quartiles <- quantile(globalCasesByCountry$X3.9.23, probs = c(0.2, 0.4, 0.6, 0.8))
+
+# Initialize the map
+map <- leaflet() %>%
+  addTiles() %>%
+  setView(lng = 0.0, lat = 10.0, zoom = 1.5)
+
+# Iterate over every country
+for (i in 1:nrow(globalCasesByCountry)) {
+  cases <- globalCasesByCountry$X3.9.23[i]
+  deaths <- globalDeathsByCountry$X3.9.23[i]
+  
+  # Create the popup message
+  popupMessage <- paste(
+    "<b>", globalCasesByCountry$Country.Region[i], "</b>",
+    "<br>Cases:", format(cases, big.mark = ","),
+    "<br>Deaths:", format(deaths, big.mark = ",")
+  )
+  
+  # Add marker to the map given latitude and longitude, set color according to quantile function
+  map <- map %>%
+    addCircleMarkers(lng = globalCasesByCountry$Long[i], lat = globalCasesByCountry$Lat[i], popup = popupMessage, label = globalCasesByCountry$Country.Region[i], radius = 5, color = case_when(cases > quartiles[4] ~ rgb(1,0,0), cases > quartiles[3] ~ rgb(0.8, 0.4, 0.4), cases > quartiles[2] ~ rgb(0.5, 0.5, 0.5), cases > quartiles[1] ~ rgb(0.4, 0.4, 0.8), TRUE ~ rgb(0, 0, 1)))
+}
+
+# Display the map
+map
+```
+
+# Objective 2 - Narrowing Down Hot Spots
+
+Seeing the global map of COVID-19 cases results in the stark realization that some countries are more affected than others. In order to narrow down your studies, create a table using kable from knitr listing the top countries as far as confirmations and deaths (sum values for provinces of the same country into one value and show the country only). Now that we are using RMarkdown to create HTML files, we have much more options for how we display our table. For reference on how to customize tables using knitr, visit this [website](https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html). Consult the table below for an example of a customized table ranking cases by country. While it is not required to replicate this table exactly, it would be a fantastic challenge to show off your knitr prowess.
+
+```{r, obj2, include=TRUE}
+
+```
+
+# Objective 3 - Zooming Into Our State
+
+After reading the top tables, you are stunned! The US overtakes every other country in terms of COVID-19 confirmations. As such, you are concerned about the state you live in and would like to understand how COVID-19 events have shaped the trajectory of the disease. Create two scatter plots to gain a better understanding. The first scatter plot should be California’s trajectory for confirmations. The second scatter plot should show California’s top three city trajectories for confirmations. You are interested in studying how the vaccine affected the number of confirmations. The Moderna vaccine was first available as an emergency use authorized (EUA) vaccine and required two shots spaced six weeks apart. Indicate on the plots the day the second dosage was given to those that received the first dosage the day Moderna was EUA (January 29th, 2021). As a diligent scientist that knows that new COVID variants have mutations in the spike protein (the region that the vaccine was developed for), you also want to study how confirmation rates change as new variants become the dominant infectious strain. Indicate on the plots when the delta and omicron variants became the dominant strain in California (May 11th, 2021 and November 26th, 2021 respectively). In the example below, the function plot_grid from the R package cowplot was to organize the graphs into a grid to more easily compare statewide vs top city plots.
+
+```{r, obj3, include=TRUE}
+
+```
+
+# Objective 4 - Digging Deeper
+
+Although these plots do not tell the whole story, they are great for helping us determine where to look. Different cities may have different populations, population densities, cultural discrepancies, compliance, and city regulations to name a few. We will explore the role of population on these metrics using visualizations. Arrange two scatter plots using cowplot’s plot_grid to show the relationship between population and confirmed counts as well as death counts and confirmed counts. You will need to use a log transform on all variables to show such a relationship. Please consult the example below for an idea of what this may look like. From these graphs we can see that population greatly affects confirmations and deaths. This coincides with our plots above as Los Angeles’s population is 301% greater than San Diego’s population and 406% greater than Riverside’s population!
+
+```{r, obj4, include=TRUE}
+
+```
