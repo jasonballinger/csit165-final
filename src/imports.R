@@ -1,6 +1,11 @@
 library(readr)
 library(leaflet)
 library(dplyr)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(tidyr)
+library(ggplot2)
 
 covid_global_confirmed <- data.frame(read_delim(file="time_series_covid19_confirmed_global.csv", delim=","))
 covid_global_deaths <- data.frame(read_delim(file="time_series_covid19_deaths_global.csv", delim=","))

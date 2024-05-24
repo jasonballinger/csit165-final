@@ -9,6 +9,11 @@ output: html_document
 library(readr)
 library(leaflet)
 library(dplyr)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(tidyr)
+library(ggplot2)
 
 covid_global_confirmed <- data.frame(read_delim(file="time_series_covid19_confirmed_global.csv", delim=","))
 covid_global_deaths <- data.frame(read_delim(file="time_series_covid19_deaths_global.csv", delim=","))
@@ -72,7 +77,34 @@ map
 Seeing the global map of COVID-19 cases results in the stark realization that some countries are more affected than others. In order to narrow down your studies, create a table using kable from knitr listing the top countries as far as confirmations and deaths (sum values for provinces of the same country into one value and show the country only). Now that we are using RMarkdown to create HTML files, we have much more options for how we display our table. For reference on how to customize tables using knitr, visit this [website](https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html). Consult the table below for an example of a customized table ranking cases by country. While it is not required to replicate this table exactly, it would be a fantastic challenge to show off your knitr prowess.
 
 ```{r, obj2, include=TRUE}
+global_confirmed <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/4360e50239b4eb6b22f3a1759323748f36752177/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
 
+# List of unique countries in the dataset
+countries <- unique(global_confirmed$`Country/Region`)
+
+# Initialize empty lists to store summed counts
+summed_global_confirmed <- vector("numeric", length(countries))
+
+# Sum counts for each country
+for (i in 1:length(countries)) {
+  country <- countries[i]
+  summed_global_confirmed[i] <- sum(global_confirmed[global_confirmed$`Country/Region` == country, 5:ncol(global_confirmed)])
+}
+
+# Create data frames from summed counts
+sum_global_confirmed_dataframe <- data.frame(Country = countries, Confirmed = summed_global_confirmed)
+
+# Sort the data frames in descending order based on counts
+sum_global_confirmed_dataframe <- sum_global_confirmed_dataframe[order(-sum_global_confirmed_dataframe$Confirmed), ]
+
+# Table for countries confirmations
+sum_global_confirmed_dataframe %>%
+  kbl() %>%
+  kable_material(c("striped", "hover", "condensed")) %>%
+  add_header_above(c("Table of Top Countries", " ", " "))
+
+# Print tables
+print(sum_global_confirmed_dataframe)
 ```
 
 # Objective 3 - Zooming Into Our State
@@ -80,7 +112,71 @@ Seeing the global map of COVID-19 cases results in the stark realization that so
 After reading the top tables, you are stunned! The US overtakes every other country in terms of COVID-19 confirmations. As such, you are concerned about the state you live in and would like to understand how COVID-19 events have shaped the trajectory of the disease. Create two scatter plots to gain a better understanding. The first scatter plot should be California’s trajectory for confirmations. The second scatter plot should show California’s top three city trajectories for confirmations. You are interested in studying how the vaccine affected the number of confirmations. The Moderna vaccine was first available as an emergency use authorized (EUA) vaccine and required two shots spaced six weeks apart. Indicate on the plots the day the second dosage was given to those that received the first dosage the day Moderna was EUA (January 29th, 2021). As a diligent scientist that knows that new COVID variants have mutations in the spike protein (the region that the vaccine was developed for), you also want to study how confirmation rates change as new variants become the dominant infectious strain. Indicate on the plots when the delta and omicron variants became the dominant strain in California (May 11th, 2021 and November 26th, 2021 respectively). In the example below, the function plot_grid from the R package cowplot was to organize the graphs into a grid to more easily compare statewide vs top city plots.
 
 ```{r, obj3, include=TRUE}
+# Load data
+national_confirmed <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
 
+# FIRST GRAPH
+# Filter data to create a new data frame with only data from California 
+california_confirmed <- national_confirmed %>%
+  filter(Province_State == "California")
+
+# Calculate column sums for the selected rows
+california_sum <- colSums(california_confirmed[, 12:ncol(california_confirmed)], na.rm = TRUE)
+
+# Create a new row with the sums and bind it to the dataframe keeping the initial columns
+california_sum <- c(california_confirmed[1, 1:11], california_sum) 
+california_confirmed <- rbind(california_confirmed, california_sum)
+
+# Select the last row which contains the summed data
+totaled_california_confirmed <- california_confirmed[nrow(california_confirmed), ]
+
+# Convert data from wide to long format
+totaled_california_confirmed <- totaled_california_confirmed %>%
+  pivot_longer(cols = 12:ncol(totaled_california_confirmed), names_to = "date", values_to = "cases")
+
+# Convert date column to the date format
+totaled_california_confirmed$date <- as.Date(totaled_california_confirmed$date, format = "%m/%d/%y")
+
+# Plot COVID-19 Confirmed Cases in California vs Date
+ggplot(totaled_california_confirmed, aes(x = date, y = cases)) +
+  geom_point() +
+  labs(title = "COVID-19 Confirmed Cases: California",
+       x = "Date",
+       y = "Confirmed Cases") +
+  theme_minimal()
+
+# SECOND GRAPH
+# create a new column in confirmed with the total confirmed cases for each country
+california_confirmed_second_graph <- national_confirmed %>%
+  filter(Province_State == "California") %>%
+  mutate(total_confirmed = rowSums(select(., 12:length(.)), na.rm = TRUE)) %>%
+  arrange(desc(total_confirmed))
+
+# find the top 3 cities with the most confirmed cases
+top_3_cities <- california_confirmed_second_graph[1:3, ]
+print(top_3_cities$Admin2)
+
+# convert top 3 cities data from wide to long format
+top_3_cities <- top_3_cities %>%
+  pivot_longer(cols = 12:ncol(national_confirmed), names_to = "date", values_to = "cases")
+
+# convert top 3 cities date column to the date format
+top_3_cities$date <- as.Date(gsub("X", "", top_3_cities$date), format = "%m/%d/%y")
+
+# plot COVID-19 Confirmed Cases in the Top 3 Cities vs Date with DElta and Omicron Lines
+ggplot(top_3_cities, aes(x = date, y = cases, color = `Admin2`)) +
+  geom_point() +
+  scale_color_manual(values = c("red", "orange", "yellow")) +
+  labs(title = "COVID-19 Confirmed Cases: Top 3 Cities",
+       x = "Date",
+       y = "Confirmed Cases",
+       color = "City") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  geom_vline(xintercept = as.Date("2021-05-11"), linetype = "dashed", color = "blue") +
+  annotate("text", x = as.Date("2021-05-11"), y = Inf, label = "Delta", vjust = 1, hjust = 1) +
+  geom_vline(xintercept = as.Date("2021-11-26"), linetype = "dashed", color = "green") +
+  annotate("text", x = as.Date("2021-11-26"), y = Inf, label = "Omicron", vjust = 1, hjust = 1)
 ```
 
 # Objective 4 - Digging Deeper
