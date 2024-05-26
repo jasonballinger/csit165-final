@@ -14,6 +14,10 @@ library(knitr)
 library(kableExtra)
 library(tidyr)
 library(ggplot2)
+library(cowplot)
+library(curl)
+library(grid)
+library(gridExtra)
 
 covid_global_confirmed <- data.frame(read_delim(file="time_series_covid19_confirmed_global.csv", delim=","))
 covid_global_deaths <- data.frame(read_delim(file="time_series_covid19_deaths_global.csv", delim=","))
@@ -185,43 +189,29 @@ Although these plots do not tell the whole story, they are great for helping us 
 
 
 ```{r, obj4, include=TRUE}
-# Load the required libraries
-library(ggplot2)
-library(dplyr)
-library(cowplot)
-
 # Load the data
-covid_data <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/4360e50239b4eb6b22f3a1759323748f36752177/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
-
-# Aggregate data at the country level
-country_cases <- covid_data %>%
-  group_by(`Country/Region`) %>%
-  summarize(total_cases = sum(!is.na(cases)), 
-            total_deaths = sum(!is.na(deaths)))
+merged <- merge(globalCasesByCountry, globalDeathsByCountry, by="Country.Region")
+names(merged)[names(merged) == "X3.9.23.x"] <- "cases"
+names(merged)[names(merged) == "X3.9.23.y"] <- "deaths"
 
 # Log transformation of confirmed counts and death counts for the second plot
-country_cases <- country_cases %>%
-  mutate(log_total_cases = log(total_cases + 1),  # Adding 1 to avoid log(0)
-         log_total_deaths = log(total_deaths + 1))  # Adding 1 to avoid log(0)
+merged <- merged %>%
+  mutate(log_total_cases = log(cases + 1),  # Adding 1 to avoid log(0)
+         log_total_deaths = log(deaths + 1))  # Adding 1 to avoid log(0)
 
 # Scatter plot for total cases vs. total deaths
-plot1 <- ggplot(country_cases, aes(x = total_cases, y = total_deaths)) +
+plot1 <- ggplot(merged, aes(x = cases, y = deaths)) +
   geom_point() +
   labs(title = "Total Confirmed Cases vs. Total Death Counts", x = "Total Confirmed Cases", y = "Total Death Counts") +
   theme_minimal()
 
 # Scatter plot for log-transformed total cases vs. log-transformed total deaths
-plot2 <- ggplot(country_cases, aes(x = log_total_cases, y = log_total_deaths)) +
+plot2 <- ggplot(merged, aes(x = log_total_cases, y = log_total_deaths)) +
   geom_point() +
   labs(title = "Confirmed Cases vs. Death Counts (Log Transformed)", 
        x = "Log Transformed Confirmed Cases", y = "Log Transformed Death Counts") +
   theme_minimal()
 
-# Combine the plots side by side
-combined_plot <- plot_grid(plot1, plot2, ncol = 2)
-
-# Display the combined plot
-print(combined_plot)
-
-
+# Display the plots side by side
+grid.draw(grid.arrange(plot1, plot2, ncol=2))
 ```
